@@ -257,16 +257,5 @@ Algunas líneas de mejora propuestas:
   - Exploración de LoRaWAN u otras tecnologías para acceso remoto a los datos.
 
 ---
-
-## 📂 Estructura sugerida del repositorio
-
-Puedes organizar el repositorio de la siguiente forma (ajústalo a tu gusto):
-
-```text
-.
-├── arduino_tx/           # Código Arduino del nodo de sensado (LoRa TX + sensores)
-├── milkv_rx/             # Código C de recepción y logging en la Milk-V Duo
-│   └── lora_rx_log_v2.c
-├── docs/                 # Informe en PDF, esquemas, diagramas, etc.
-├── images/               # Fotos del montaje, capturas de consola, diagramas
-└── README.md             # Este archivo
+-**Link pagina web**
+-https://sebaspantojaf.wixsite.com/my-site-1/my-subscriptions
