@@ -11,6 +11,10 @@ humedad del suelo e iluminancia, y transmite estas variables mediante un enlace 
 punto a punto hacia una pasarela basada en **Milk-V Duo 256M**, sin necesidad de
 conectividad a Internet.
 
+-**Link pagina web**
+
+-https://sebaspantojaf.wixsite.com/my-site-1/my-subscriptions
+
 ---
 
 ## 🚜 Contexto y motivación
@@ -257,5 +261,4 @@ Algunas líneas de mejora propuestas:
   - Exploración de LoRaWAN u otras tecnologías para acceso remoto a los datos.
 
 ---
--**Link pagina web**
--https://sebaspantojaf.wixsite.com/my-site-1/my-subscriptions
+
