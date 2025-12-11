@@ -78,126 +78,6 @@ La arquitectura actual del sistema está compuesta por dos bloques principales:
 
 ---
 
-## 🔩 Hardware
-
-### Nodo de sensado (Arduino UNO)
-
-- **Placa**: Arduino UNO.
-- **Sensores**:
-  - `DHT11` (digital) → pin digital configurado como entrada.
-  - `BH1750` (I²C) → SDA/SCL en A4/A5.
-  - `HW-080` (humedad de suelo) → entrada analógica A2.
-- **LoRa TX**:
-  - Módulo SX1278/RA-02.
-  - Conectado por SPI (CS, RST, DIO0 según el diseño del nodo).
-- Alimentación a 5 V (nivelado donde sea necesario para el LoRa si el módulo lo requiere).
-
-### Pasarela (Milk-V Duo 256M + LoRa)
-
-- **Placa principal**: Milk-V Duo 256M.
-- **Módulo LoRa SX1278/RA-02** (3,3 V).
-- Conexiones típicas (ejemplo, según cabecera usada):
-
-| Pin LoRa | Señal           | Pin Milk-V Duo 256M | Comentario                          |
-|----------|-----------------|---------------------|--------------------------------------|
-| VCC      | 3,3 V           | 3V3_OUT             | Alimentación del SX1278             |
-| GND      | GND             | GND                 | Referencia común                    |
-| SCK      | Reloj SPI       | SPI0_SCK            | Bus SPI0                            |
-| MOSI     | Datos M→E       | SPI0_MOSI           | Milk-V → LoRa                       |
-| MISO     | Datos E→M       | SPI0_MISO           | LoRa → Milk-V                       |
-| NSS/CS   | Chip Select     | SPI0_CS0            | Asociado a `/dev/spidev0.0`        |
-| RST      | Reset           | 3,3 V (fijo)        | Reset por hardware siempre alto     |
-| DIO0     | IRQ/RxDone (opt)| GPIO libre          | Reservado para futuras mejoras      |
-
-> **Nota:** en el firmware actual se usan *flags* por SPI para detectar paquetes; DIO0
-> se deja listo para una futura implementación basada en interrupciones.
-
----
-
-## 💻 Software
-
-### 1. Firmware de transmisión (Arduino)
-
-Características principales del código de transmisión:
-
-- Librerías utilizadas:
-  - `SPI.h`
-  - `LoRa.h` (sandeepmistry)
-  - `DHT.h`
-  - `Wire.h`
-  - `BH1750.h`
-- Secuencia típica en `loop()`:
-  1. Leer temperatura y humedad del aire (`DHT11`).
-  2. Leer nivel analógico del sensor HW-080 y convertir a porcentaje de humedad de suelo.
-  3. Leer iluminancia en lux con el `BH1750`.
-  4. Construir una cadena CSV:
-
-        temp_C,humAmb_pct,humSuelo_pct,lux
-
-  5. Enviar la trama por LoRa:
-
-        LoRa.beginPacket();
-        LoRa.print(mensaje);
-        LoRa.endPacket();
-
-  6. Esperar algunos segundos y repetir.
-
-### 2. Firmware de recepción y logging (Milk-V Duo 256M)
-
-Archivo principal: **`lora_rx_log_v2.c`**
-
-- **Auto-detección SPI**:
-  - Prueba distintas combinaciones de modo SPI (0–3) y velocidades (50–500 kHz).
-  - Lee `REG_VERSION` y realiza un test de escritura/lectura sobre `REG_SYNC_WORD`.
-  - Si la lectura coincide, guarda `working_mode` y `working_speed` y continúa.
-
-- **Inicialización LoRa (`lora_init`)**:
-  - Pone el SX1278 en `SLEEP` y luego en `STDBY`.
-  - Configura:
-    - Frecuencia: 433 MHz.
-    - SF: 12.
-    - BW: 62,5 kHz.
-    - CR: 4/8.
-    - Sync word: `0x12`.
-    - CRC desactivado (para coincidir con `LoRa.h` en Arduino).
-    - LNA Boost + optimización para bajas tasas de datos (LDRO).
-
-- **Recepción de paquetes**:
-  - Entra en `MODE_RX_CONTINUOUS`.
-  - Espera a que se active `IRQ_RX_DONE`.
-  - Comprueba si hay error de CRC (descarta en ese caso).
-  - Lee tamaño de paquete, posición del FIFO, extrae el payload.
-  - Calcula RSSI y SNR desde los registros del SX1278.
-  - Devuelve longitud y métricas al `main`.
-
-- **Parsing y logging**:
-  - El programa espera tramas en formato:
-
-        temp_C,humAmb_pct,humSuelo_pct,lux
-
-  - Usa `sscanf` para separar los 4 campos.
-  - Obtiene la fecha y hora actual con resolución de milisegundos.
-  - Muestra la información en consola en un formato legible.
-  - Abre/crea un archivo CSV (`lora_datos.csv` o `/tmp/lora_datos.csv`) y agrega:
-
-        fecha_hora,temp_C,humAmb_pct,humSuelo_pct,lux,rssi_dBm,snr_dB
-
-### 3. Imagen y entorno Linux en la Milk-V
-
-En el desarrollo del proyecto se trabajó con herramientas como:
-
-- Repositorios de compilación y SDK de Milk-V / LicheeRV.
-- Documentación de U-Boot y del kernel para habilitar:
-  - Consola serie.
-  - SPI de usuario (`spidev`).
-  - Ajuste de pines mediante `devmem`.
-
-> La idea es disponer de una imagen Linux mínima donde:
-> - Exista `/dev/spidev0.0`.
-> - Se pueda compilar el código C directamente en la placa o usar cross-compile.
-
----
-
 ## 🛠️ Configuración y compilación del SDK para Milk-V Duo 256M (PRINCIPAL)
 
 Esta sección detalla los pasos **esenciales** para configurar y compilar el SDK de la  
@@ -341,6 +221,128 @@ presente errores, confirmando que el sistema está correctamente configurado par
 utilizar el bus SPI con el módulo LoRa.
 
 ---
+
+
+## 🔩 Hardware
+
+### Nodo de sensado (Arduino UNO)
+
+- **Placa**: Arduino UNO.
+- **Sensores**:
+  - `DHT11` (digital) → pin digital configurado como entrada.
+  - `BH1750` (I²C) → SDA/SCL en A4/A5.
+  - `HW-080` (humedad de suelo) → entrada analógica A2.
+- **LoRa TX**:
+  - Módulo SX1278/RA-02.
+  - Conectado por SPI (CS, RST, DIO0 según el diseño del nodo).
+- Alimentación a 5 V (nivelado donde sea necesario para el LoRa si el módulo lo requiere).
+
+### Pasarela (Milk-V Duo 256M + LoRa)
+
+- **Placa principal**: Milk-V Duo 256M.
+- **Módulo LoRa SX1278/RA-02** (3,3 V).
+- Conexiones típicas (ejemplo, según cabecera usada):
+
+| Pin LoRa | Señal           | Pin Milk-V Duo 256M | Comentario                          |
+|----------|-----------------|---------------------|--------------------------------------|
+| VCC      | 3,3 V           | 3V3_OUT             | Alimentación del SX1278             |
+| GND      | GND             | GND                 | Referencia común                    |
+| SCK      | Reloj SPI       | SPI0_SCK            | Bus SPI0                            |
+| MOSI     | Datos M→E       | SPI0_MOSI           | Milk-V → LoRa                       |
+| MISO     | Datos E→M       | SPI0_MISO           | LoRa → Milk-V                       |
+| NSS/CS   | Chip Select     | SPI0_CS0            | Asociado a `/dev/spidev0.0`        |
+| RST      | Reset           | 3,3 V (fijo)        | Reset por hardware siempre alto     |
+| DIO0     | IRQ/RxDone (opt)| GPIO libre          | Reservado para futuras mejoras      |
+
+> **Nota:** en el firmware actual se usan *flags* por SPI para detectar paquetes; DIO0
+> se deja listo para una futura implementación basada en interrupciones.
+
+---
+
+## 💻 Software
+
+### 1. Firmware de transmisión (Arduino)
+
+Características principales del código de transmisión:
+
+- Librerías utilizadas:
+  - `SPI.h`
+  - `LoRa.h` (sandeepmistry)
+  - `DHT.h`
+  - `Wire.h`
+  - `BH1750.h`
+- Secuencia típica en `loop()`:
+  1. Leer temperatura y humedad del aire (`DHT11`).
+  2. Leer nivel analógico del sensor HW-080 y convertir a porcentaje de humedad de suelo.
+  3. Leer iluminancia en lux con el `BH1750`.
+  4. Construir una cadena CSV:
+
+        temp_C,humAmb_pct,humSuelo_pct,lux
+
+  5. Enviar la trama por LoRa:
+
+        LoRa.beginPacket();
+        LoRa.print(mensaje);
+        LoRa.endPacket();
+
+  6. Esperar algunos segundos y repetir.
+
+### 2. Firmware de recepción y logging (Milk-V Duo 256M)
+
+Archivo principal: **`lora_rx_log_v2.c`**
+
+- **Auto-detección SPI**:
+  - Prueba distintas combinaciones de modo SPI (0–3) y velocidades (50–500 kHz).
+  - Lee `REG_VERSION` y realiza un test de escritura/lectura sobre `REG_SYNC_WORD`.
+  - Si la lectura coincide, guarda `working_mode` y `working_speed` y continúa.
+
+- **Inicialización LoRa (`lora_init`)**:
+  - Pone el SX1278 en `SLEEP` y luego en `STDBY`.
+  - Configura:
+    - Frecuencia: 433 MHz.
+    - SF: 12.
+    - BW: 62,5 kHz.
+    - CR: 4/8.
+    - Sync word: `0x12`.
+    - CRC desactivado (para coincidir con `LoRa.h` en Arduino).
+    - LNA Boost + optimización para bajas tasas de datos (LDRO).
+
+- **Recepción de paquetes**:
+  - Entra en `MODE_RX_CONTINUOUS`.
+  - Espera a que se active `IRQ_RX_DONE`.
+  - Comprueba si hay error de CRC (descarta en ese caso).
+  - Lee tamaño de paquete, posición del FIFO, extrae el payload.
+  - Calcula RSSI y SNR desde los registros del SX1278.
+  - Devuelve longitud y métricas al `main`.
+
+- **Parsing y logging**:
+  - El programa espera tramas en formato:
+
+        temp_C,humAmb_pct,humSuelo_pct,lux
+
+  - Usa `sscanf` para separar los 4 campos.
+  - Obtiene la fecha y hora actual con resolución de milisegundos.
+  - Muestra la información en consola en un formato legible.
+  - Abre/crea un archivo CSV (`lora_datos.csv` o `/tmp/lora_datos.csv`) y agrega:
+
+        fecha_hora,temp_C,humAmb_pct,humSuelo_pct,lux,rssi_dBm,snr_dB
+
+### 3. Imagen y entorno Linux en la Milk-V
+
+En el desarrollo del proyecto se trabajó con herramientas como:
+
+- Repositorios de compilación y SDK de Milk-V / LicheeRV.
+- Documentación de U-Boot y del kernel para habilitar:
+  - Consola serie.
+  - SPI de usuario (`spidev`).
+  - Ajuste de pines mediante `devmem`.
+
+> La idea es disponer de una imagen Linux mínima donde:
+> - Exista `/dev/spidev0.0`.
+> - Se pueda compilar el código C directamente en la placa o usar cross-compile.
+
+---
+
 
 ## 🧪 Pruebas realizadas
 
